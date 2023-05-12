@@ -20,10 +20,7 @@ def get_applicable_modifiers(obj, export_settings):
 
 def record_modifier_config(obj):
     """Returns modifiers viewport visibility config"""
-    modifier_config_cache = []
-    for mod in obj.modifiers:
-        modifier_config_cache.append(mod.show_viewport)
-    return modifier_config_cache
+    return [mod.show_viewport for mod in obj.modifiers]
 
 
 def restore_modifier_config(obj, modifier_config_cache):
@@ -61,7 +58,7 @@ class MeshResourceKey:
         # Here collect info of all the modifiers applied on the mesh.
         # Modifiers along with the original mesh data would determine
         # the evaluated mesh.
-        mod_info_list = list()
+        mod_info_list = []
         for modifier in get_applicable_modifiers(obj, export_settings):
             # Modifier name indicates its type, it's an identifier
             mod_info_list.append(modifier.name)
@@ -87,9 +84,9 @@ class MeshResourceKey:
                     # `FloatProperty`, `IntProperty`, `StringProperty`
                     # they are primitive types and all good to be hashed.
                     assert prop.type in \
-                        ('BOOLEAN', 'ENUM', 'INT', 'STRING', 'FLOAT')
+                            ('BOOLEAN', 'ENUM', 'INT', 'STRING', 'FLOAT')
                     if isinstance(prop_val, (int, float, str, bool)) or \
-                            prop_val is None:
+                                prop_val is None:
                         mod_info_list.append(prop_val)
                     else:
                         # iterable properties

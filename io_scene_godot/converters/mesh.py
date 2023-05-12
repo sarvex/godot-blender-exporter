@@ -49,7 +49,7 @@ def export_mesh_node(escn_file, export_settings, obj, parent_gd_node):
         armature_obj.data.pose_position = armature_pose_position
 
     if mesh_id is not None:
-        mesh_node['mesh'] = "SubResource({})".format(mesh_id)
+        mesh_node['mesh'] = f"SubResource({mesh_id})"
         mesh_node['visible'] = obj.visible_get()
 
         mesh_resource = escn_file.internal_resources[mesh_id - 1]
@@ -84,10 +84,14 @@ def fix_vertex(vtx):
 def get_modifier_armature(mesh_object):
     """Get the armature modifier target object of a blender object
     if does not have one, return None"""
-    for modifier in mesh_object.modifiers:
-        if isinstance(modifier, bpy.types.ArmatureModifier):
-            return modifier.object
-    return None
+    return next(
+        (
+            modifier.object
+            for modifier in mesh_object.modifiers
+            if isinstance(modifier, bpy.types.ArmatureModifier)
+        ),
+        None,
+    )
 
 
 def export_object_link_material(escn_file, export_settings, mesh_object,
@@ -99,11 +103,8 @@ def export_object_link_material(escn_file, export_settings, mesh_object,
             surface_id = mesh_resource.get_surface_id(index)
             if (surface_id is not None and
                     export_settings['material_mode'] != 'NONE'):
-                gd_node['material/{}'.format(surface_id)] = export_material(
-                    escn_file,
-                    export_settings,
-                    mesh_object,
-                    slot.material
+                gd_node[f'material/{surface_id}'] = export_material(
+                    escn_file, export_settings, mesh_object, slot.material
                 )
 
 
@@ -118,7 +119,7 @@ class ArrayMeshResource(InternalResource):
 
     def __init__(self, name):
         super().__init__('ArrayMesh', name)
-        self._mat_to_surf_mapping = dict()
+        self._mat_to_surf_mapping = {}
 
     def get_surface_id(self, material_index):
         """Given blender material index, return the corresponding
@@ -139,7 +140,7 @@ class ArrayMeshResourceExporter:
 
         self.mesh_resource = None
         self.has_tangents = False
-        self.vgroup_to_bone_mapping = dict()
+        self.vgroup_to_bone_mapping = {}
 
     def init_mesh_bones_data(self, armature_obj, export_settings):
         """Find the mapping relation between vertex groups
@@ -191,10 +192,10 @@ class ArrayMeshResourceExporter:
         modifiers_not_supported = (
             bpy.types.SubsurfModifier,
         )
-        for modifier in mesh_object.modifiers:
-            if isinstance(modifier, modifiers_not_supported):
-                return False
-        return True
+        return not any(
+            isinstance(modifier, modifiers_not_supported)
+            for modifier in mesh_object.modifiers
+        )
 
     @staticmethod
     def intialize_surfaces_morph_data(surfaces):
@@ -219,9 +220,7 @@ class ArrayMeshResourceExporter:
             if shape_key == shape_keys.reference_key:
                 continue
 
-            self.mesh_resource["blend_shape/names"].append(
-                '"{}"'.format(shape_key.name)
-            )
+            self.mesh_resource["blend_shape/names"].append(f'"{shape_key.name}"')
 
             mesh_converter = MeshConverter(self.object, export_settings)
             shape_key_mesh = mesh_converter.to_mesh(shape_key_index=index)
@@ -446,10 +445,7 @@ class VerticesArrays:
         bone_idx_array = Array("IntArray(")
         bone_ws_array = Array("FloatArray(")
         for vert in self.vertices:
-            weights = []
-            for i in range(len(vert.bones)):
-                weights.append((vert.bones[i], vert.weights[i]))
-
+            weights = [(vert.bones[i], vert.weights[i]) for i in range(len(vert.bones))]
             weights = sorted(weights, key=lambda x: x[1], reverse=True)
 
             # totalw guaranteed to be not zero
@@ -481,11 +477,11 @@ class Surface:
 
     def __init__(self):
         # map from a Vertex.tup() to surface.vertex_data.indices
-        self.vertex_map = dict()
+        self.vertex_map = {}
         self.vertex_data = VerticesArrays()
         self.morph_arrays = Array(prefix="[", seperator=",\n", suffix="]")
         # map from mesh.loop_index to surface.vertex_data.indices
-        self.vertex_index_map = dict()
+        self.vertex_index_map = {}
         self.id = None
         self.material = None
 
@@ -493,7 +489,7 @@ class Surface:
     def name_str(self):
         """Used to separate surfaces that are part of the same mesh by their
         id"""
-        return "surfaces/" + str(self.id)
+        return f"surfaces/{str(self.id)}"
 
     def generate_object(self):
         """Generate object with mapping structure which fully

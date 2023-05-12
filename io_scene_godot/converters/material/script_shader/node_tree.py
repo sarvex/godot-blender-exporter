@@ -21,7 +21,7 @@ class ScriptShaderResource(InternalResource):
 
     def to_string(self):
         """Serialization"""
-        self['code'] = '"{}"'.format(self.shader.generate_scripts())
+        self['code'] = f'"{self.shader.generate_scripts()}"'
         return InternalResource.to_string(self)
 
 
@@ -43,12 +43,12 @@ class ScriptShader:
             'specular_schlick_ggx',
         ]
         self._functions = set()
-        self._global_vars_def_lines = list()
-        self._uniform_code_lines = list()
-        self._fragment_code_lines = list()
-        self._vertex_code_lines = list()
+        self._global_vars_def_lines = []
+        self._uniform_code_lines = []
+        self._fragment_code_lines = []
+        self._vertex_code_lines = []
 
-        self._textures = dict()
+        self._textures = {}
 
         self.flags = ShadingFlags()
 
@@ -70,25 +70,22 @@ class ScriptShader:
         if self.flags.inv_view_mat_used:
             self._fragment_code_lines.insert(
                 0,
-                "mat4 %s = inverse(INV_CAMERA_MATRIX)"
-                % NodeConverterBase.INV_VIEW_MAT
+                f"mat4 {NodeConverterBase.INV_VIEW_MAT} = inverse(INV_CAMERA_MATRIX)",
             )
 
         if self.flags.inv_model_mat_used:
             self._fragment_code_lines.insert(
                 0,
-                "mat4 %s = inverse(WORLD_MATRIX)"
-                % NodeConverterBase.INV_MODEL_MAT,
+                f"mat4 {NodeConverterBase.INV_MODEL_MAT} = inverse(WORLD_MATRIX)",
             )
 
         if self.flags.aabb_tex_coord_used:
-            self._uniform_code_lines.append(
-                "uniform vec3 %s" % self.UNI_AABB_POS)
-            self._uniform_code_lines.append(
-                "uniform vec3 %s" % self.UNI_AABB_SIZE)
+            self._uniform_code_lines.append(f"uniform vec3 {self.UNI_AABB_POS}")
+            self._uniform_code_lines.append(f"uniform vec3 {self.UNI_AABB_SIZE}")
 
             self._global_vars_def_lines.append(
-                "varying smooth vec3 %s" % NodeConverterBase.AABB_UVW)
+                f"varying smooth vec3 {NodeConverterBase.AABB_UVW}"
+            )
 
             self._vertex_code_lines.insert(
                 0,
@@ -98,23 +95,15 @@ class ScriptShader:
                    self.UNI_AABB_POS, self.UNI_AABB_SIZE)
             )
 
-        for name in (
-                FragmentShaderLink.ALBEDO, FragmentShaderLink.SSS_STRENGTH,
-                FragmentShaderLink.SPECULAR, FragmentShaderLink.METALLIC,
-                FragmentShaderLink.ROUGHNESS, FragmentShaderLink.CLEARCOAT,
-                FragmentShaderLink.CLEARCOAT_GLOSS,
-                FragmentShaderLink.EMISSION, FragmentShaderLink.NORMAL):
+        for name in (FragmentShaderLink.ALBEDO, FragmentShaderLink.SSS_STRENGTH, FragmentShaderLink.SPECULAR, FragmentShaderLink.METALLIC, FragmentShaderLink.ROUGHNESS, FragmentShaderLink.CLEARCOAT, FragmentShaderLink.CLEARCOAT_GLOSS, FragmentShaderLink.EMISSION, FragmentShaderLink.NORMAL):
             # trival properties
             var = output_shader_link.get_property(name)
             if var is not None:
-                self._fragment_code_lines.append(
-                    '%s = %s' % (name.upper(), str(var))
-                )
+                self._fragment_code_lines.append(f'{name.upper()} = {str(var)}')
 
         transmission = output_shader_link.get_property(
             FragmentShaderLink.TRANSMISSION)
-        transm_output_assign = \
-            'TRANSMISSION = vec3(1.0, 1.0, 1.0) * %s;' % transmission
+        transm_output_assign = f'TRANSMISSION = vec3(1.0, 1.0, 1.0) * {transmission};'
         # blender transmission is a float, however in godot
         # it's a vec3, here the conversion is done
         if self.flags.transmission_used and transmission is not None:
@@ -122,7 +111,7 @@ class ScriptShader:
         elif transmission is not None:
             self._fragment_code_lines.append(
                 "// uncomment it when you need it")
-            self._fragment_code_lines.append("// " + transm_output_assign)
+            self._fragment_code_lines.append(f"// {transm_output_assign}")
 
         oren_nayar_roughness = output_shader_link.get_property(
             FragmentShaderLink.OREN_NAYAR_ROUGHNESS
@@ -132,32 +121,31 @@ class ScriptShader:
             # mostly we don't need it, disney model is better
             self._fragment_code_lines.append(
                 "// uncomment it only when you set diffuse mode to oren nayar")
-            self._fragment_code_lines.append(
-                '// ROUGHNESS = %s;' % oren_nayar_roughness
-            )
+            self._fragment_code_lines.append(f'// ROUGHNESS = {oren_nayar_roughness};')
 
         tangent = output_shader_link.get_property(FragmentShaderLink.TANGENT)
-        tgt_output_assign = \
-            "TANGENT = normalize(cross(cross(%s, NORMAL), NORMAL));" % tangent
         binml_output_assign = "BINORMAL = cross(TANGENT, NORMAL);"
+        tgt_output_assign = (
+            f"TANGENT = normalize(cross(cross({tangent}, NORMAL), NORMAL));"
+        )
         if self.flags.uv_or_tangent_used and tangent is not None:
             self._fragment_code_lines.append(tgt_output_assign)
             self._fragment_code_lines.append(binml_output_assign)
         elif tangent is not None:
             self._fragment_code_lines.append(
                 "// uncomment it when you are modifing TANGENT")
-            self._fragment_code_lines.append("// " + tgt_output_assign)
-            self._fragment_code_lines.append("// " + binml_output_assign)
+            self._fragment_code_lines.append(f"// {tgt_output_assign}")
+            self._fragment_code_lines.append(f"// {binml_output_assign}")
 
         anisotropy = \
-            output_shader_link.get_property(FragmentShaderLink.ANISOTROPY)
-        ans_output_assign = "ANISOTROPY = %s;" % anisotropy
+                output_shader_link.get_property(FragmentShaderLink.ANISOTROPY)
+        ans_output_assign = f"ANISOTROPY = {anisotropy};"
         if self.flags.uv_or_tangent_used and anisotropy is not None:
             self._fragment_code_lines.append(ans_output_assign)
         elif anisotropy is not None:
             self._fragment_code_lines.append(
                 "// uncomment it when you have tangent(UV) set")
-            self._fragment_code_lines.append("// " + ans_output_assign)
+            self._fragment_code_lines.append(f"// {ans_output_assign}")
 
         alpha = output_shader_link.get_property(FragmentShaderLink.ALPHA)
         ior = output_shader_link.get_property(FragmentShaderLink.IOR)
@@ -166,28 +154,22 @@ class ScriptShader:
                 fresnel_func = find_function_by_name('refraction_fresnel')
                 self._functions.add(fresnel_func)
                 self._fragment_code_lines.append(
-                    "refraction_fresnel(VERTEX, NORMAL, %s, %s)" %
-                    (ior, alpha)
+                    f"refraction_fresnel(VERTEX, NORMAL, {ior}, {alpha})"
                 )
                 refraction_offset_id = 'refraction_offset'
                 # just some magic random value, available for improvements
                 self._uniform_code_lines.append(
-                    'uniform vec2 %s = vec2(0.2, 0.2)' % refraction_offset_id
+                    f'uniform vec2 {refraction_offset_id} = vec2(0.2, 0.2)'
                 )
                 self._fragment_code_lines.append(
-                    "EMISSION += textureLod(SCREEN_TEXTURE, SCREEN_UV - "
-                    "NORMAL.xy * %s , ROUGHNESS).rgb * (1.0 - %s)" %
-                    (refraction_offset_id, alpha)
+                    f"EMISSION += textureLod(SCREEN_TEXTURE, SCREEN_UV - NORMAL.xy * {refraction_offset_id} , ROUGHNESS).rgb * (1.0 - {alpha})"
                 )
             else:
                 self._fragment_code_lines.append(
-                    "EMISSION += textureLod(SCREEN_TEXTURE, SCREEN_UV, "
-                    "ROUGHNESS).rgb * (1.0 - %s)" % alpha
+                    f"EMISSION += textureLod(SCREEN_TEXTURE, SCREEN_UV, ROUGHNESS).rgb * (1.0 - {alpha})"
                 )
 
-            self._fragment_code_lines.append(
-                "ALBEDO *= %s" % alpha
-            )
+            self._fragment_code_lines.append(f"ALBEDO *= {alpha}")
             self._fragment_code_lines.append(
                 'ALPHA = 1.0;'
             )
@@ -279,19 +261,15 @@ class ScriptShader:
 
     def get_images(self):
         """return a set of all the images used in shader"""
-        image_set = set()
-        for tex in self._textures:
-            if tex.image is not None:
-                image_set.add(tex.image)
-        return image_set
+        return {tex.image for tex in self._textures if tex.image is not None}
 
     def get_image_texture_info(self):
         """return a list of tuple (image, texture uniform)"""
-        image_uniform_tuples = list()
-        for tex, uniform in self._textures.items():
-            if tex.image is not None:
-                image_uniform_tuples.append((tex.image, uniform))
-        return image_uniform_tuples
+        return [
+            (tex.image, uniform)
+            for tex, uniform in self._textures.items()
+            if tex.image is not None
+        ]
 
 
 def find_material_output_node(node_tree):
@@ -317,9 +295,9 @@ def topology_sort(nodes):
                 return node
         return None
 
-    sorted_node_list = list()
+    sorted_node_list = []
 
-    nodes_input_count = dict()
+    nodes_input_count = {}
     for node in nodes:
         cnt = 0
         for sock in node.inputs:
@@ -401,7 +379,7 @@ def export_image_name(image):
     if image.file_format in ('JPEG', 'JPEG2000'):
         valid_extension_names = ('.jpg', '.jpeg')
     else:
-        valid_extension_names = ('.' + image.file_format.lower(), )
+        valid_extension_names = (f'.{image.file_format.lower()}', )
 
     if image.name.lower().endswith(valid_extension_names):
         return image.name
@@ -447,7 +425,7 @@ def parse_shader_node_tree(escn_file, export_settings, shader_node_tree):
     if mtl_output_node is not None:
         frag_node_list = topology_sort(shader_node_tree.nodes)
 
-        node_to_converter_map = dict()
+        node_to_converter_map = {}
         for idx, node in enumerate(frag_node_list):
             if node == mtl_output_node:
                 continue
@@ -463,10 +441,9 @@ def parse_shader_node_tree(escn_file, export_settings, shader_node_tree):
             # update texture before add local code
             shader.update_texture(converter)
 
-            shader.add_fragment_code([
-                "// node: '%s'" % node.name,
-                "// type: '%s'" % node.bl_idname,
-            ])
+            shader.add_fragment_code(
+                [f"// node: '{node.name}'", f"// type: '{node.bl_idname}'"]
+            )
             # definitions first
             shader.add_fragment_code(converter.input_definitions)
             shader.add_fragment_code(converter.output_definitions)
@@ -521,8 +498,7 @@ def export_script_shader(escn_file, export_settings, bl_object,
                                         shader_node_tree)
         if shader is None:
             raise ValidationError(
-                "Blender material '%s' not able to export as Shader Material"
-                % bl_node_mtl.name
+                f"Blender material '{bl_node_mtl.name}' not able to export as Shader Material"
             )
 
         shader_rsc = ScriptShaderResource(shader_node_tree.name, shader)
@@ -536,11 +512,11 @@ def export_script_shader(escn_file, export_settings, bl_object,
     # set object related uniforms
     if shader.flags.aabb_tex_coord_used:
         aabb = AxisAlignedBoundBox(bl_object.bound_box)
-        gd_shader_mtl['shader_param/%s' % shader.UNI_AABB_POS] = aabb.position
-        gd_shader_mtl['shader_param/%s' % shader.UNI_AABB_SIZE] = aabb.size
+        gd_shader_mtl[f'shader_param/{shader.UNI_AABB_POS}'] = aabb.position
+        gd_shader_mtl[f'shader_param/{shader.UNI_AABB_SIZE}'] = aabb.size
 
     # set texture uniforms
     for image, image_unifrom in shader.get_image_texture_info():
-        shader_param_key = 'shader_param/%s' % image_unifrom
+        shader_param_key = f'shader_param/{image_unifrom}'
         img_rsc_id = escn_file.get_external_resource(image)
         gd_shader_mtl[shader_param_key] = "ExtResource(%d)" % img_rsc_id

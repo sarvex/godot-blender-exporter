@@ -2,6 +2,7 @@
 Export to godot's escn file format - a format that Godot can work with
 without significant importing (it's the same as Godot's tscn format).
 """
+
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  This program is free software; you can redistribute it and/or
@@ -31,7 +32,7 @@ try:
     # Seems to work for Blender 3.0 (instead of old `tuple` check for
     # operator properties)
     from bpy.props import _PropertyDeferred
-except (ImportError, ):
+except ImportError:
     pass
 
 
@@ -273,7 +274,7 @@ def export(filename, overrides=None):
     Anything not overridden will use the default properties
     """
 
-    default_settings = dict()
+    default_settings = {}
     for attr_name in ExportGodot.__annotations__:
         attr = ExportGodot.__annotations__[attr_name]
         # This introspection is not very robust and may break in future blender
@@ -284,12 +285,11 @@ def export(filename, overrides=None):
             default_settings[attr_name] = attr[1]['default']
 
         # Alternate check (for Blender 3.0)
-        if bpy.app.version[0] > 2:
-            if isinstance(attr, _PropertyDeferred):
-                default_settings[attr_name] = attr.keywords['default']
+        if bpy.app.version[0] > 2 and isinstance(attr, _PropertyDeferred):
+            default_settings[attr_name] = attr.keywords['default']
 
     if overrides is not None:
-        default_settings.update(overrides)
+        default_settings |= overrides
 
     class FakeOp:
         """Fake blender operator"""

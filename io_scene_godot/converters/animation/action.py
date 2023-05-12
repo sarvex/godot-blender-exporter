@@ -78,8 +78,7 @@ def blender_path_to_bone_name(blender_object_path):
     the parameter blender_object_path is part of
     the fcurve.data_path generated through
     split_fcurve_data_path()"""
-    return re.search(r'pose.bones\["([^"]+)"\]',
-                     blender_object_path).group(1)
+    return re.search(r'pose.bones\["([^"]+)"\]', blender_object_path)[1]
 
 
 def split_fcurve_data_path(data_path):
@@ -110,7 +109,7 @@ def export_constrained_xform_action(godot_node, export_settings,
     """Export transform animation of any object has constraints,
     it use frame_set to traversal each frame, so it's costly"""
     def build_pbone_parent_map(godot_node, blender_object):
-        pose_bone_parent_map = dict()
+        pose_bone_parent_map = {}
         for pbone in blender_object.pose.bones:
             pbone_parent = pbone.parent
             # find parent bone and ensure it is exported in godot node
@@ -122,7 +121,7 @@ def export_constrained_xform_action(godot_node, export_settings,
 
     first_frame, last_frame = action_strip.frame_range
 
-    obj_xform_mats = list()
+    obj_xform_mats = []
     pbone_xform_mats = collections.OrderedDict()
 
     scene = bpy.context.scene
@@ -149,7 +148,7 @@ def export_constrained_xform_action(godot_node, export_settings,
                         pbone.matrix)
 
                 if pbone.name not in pbone_xform_mats:
-                    pbone_xform_mats[pbone.name] = list()
+                    pbone_xform_mats[pbone.name] = []
                 pbone_xform_mats[pbone.name].append(bone_space_xform)
     scene.frame_set(frame_backup)
 
@@ -319,16 +318,16 @@ def export_shapekey_action(godot_node, export_settings, blender_object,
         object_path, attribute = split_fcurve_data_path(fcurve.data_path)
 
         if attribute == 'value':
-            shapekey_name = re.search(r'key_blocks\["([^"]+)"\]',
-                                      object_path).group(1)
+            shapekey_name = re.search(r'key_blocks\["([^"]+)"\]', object_path)[
+                1
+            ]
 
             anim_rsc.add_attribute_track(
                 action_strip,
                 fcurve,
                 lambda x: x,
-                base_node_path.new_copy(
-                    "blend_shapes/{}".format(shapekey_name)),
-                use_bezier=export_settings['feature_bezier_track']
+                base_node_path.new_copy(f"blend_shapes/{shapekey_name}"),
+                use_bezier=export_settings['feature_bezier_track'],
             )
 
 
@@ -349,7 +348,7 @@ def export_light_action(light_node, export_settings, blender_lamp,
         base_node_path.new_copy('shadow_enabled'),
     )
 
-    color_attr_conversion = list()
+    color_attr_conversion = []
     # simple value tracks
     for item in light_node.attribute_conversion:
         bl_attr, gd_attr, converter = item
@@ -374,7 +373,7 @@ def export_light_action(light_node, export_settings, blender_lamp,
             for bl_attr, gd_attr, converter in color_attr_conversion:
                 if bl_attr == attribute:
                     track_path = base_node_path.new_copy(
-                        gd_attr + ':' + rgba_names[fcurve.array_index]
+                        f'{gd_attr}:{rgba_names[fcurve.array_index]}'
                     )
                     anim_rsc.add_attribute_track(
                         action_strip,
@@ -454,24 +453,23 @@ def export_camera_action(camera_node, export_settings, blender_cam,
     # blender use sensor_width and f_lens to animate fov
     # while godot directly use fov
     fov_animated = False
-    focal_len_list = list()
-    sensor_size_list = list()
+    focal_len_list = []
+    sensor_size_list = []
 
     lens_fcurve = fcurves.find('lens')
     if lens_fcurve is not None:
         fov_animated = True
-        for frame in range(first_frame, last_frame):
-            focal_len_list.append(
-                action_strip.evaluate_fcurve(lens_fcurve, frame)
-            )
+        focal_len_list.extend(
+            action_strip.evaluate_fcurve(lens_fcurve, frame)
+            for frame in range(first_frame, last_frame)
+        )
     sensor_width_fcurve = fcurves.find('sensor_width')
     if sensor_width_fcurve is not None:
         fov_animated = True
-        for frame in range(first_frame, last_frame):
-            sensor_size_list.append(
-                action_strip.evaluate_fcurve(sensor_width_fcurve, frame)
-            )
-
+        sensor_size_list.extend(
+            action_strip.evaluate_fcurve(sensor_width_fcurve, frame)
+            for frame in range(first_frame, last_frame)
+        )
     if fov_animated:
         # export fov track
         if not focal_len_list:
@@ -481,14 +479,10 @@ def export_camera_action(camera_node, export_settings, blender_cam,
             sensor_size_list = [blender_cam.sensor_width
                                 for _ in range(first_frame, last_frame)]
 
-        fov_list = list()
-        for index, flen in enumerate(focal_len_list):
-            fov_list.append(2 * math.degrees(
-                math.atan(
-                    sensor_size_list[index]/2/flen
-                )
-            ))
-
+        fov_list = [
+            2 * math.degrees(math.atan(sensor_size_list[index] / 2 / flen))
+            for index, flen in enumerate(focal_len_list)
+        ]
         anim_rsc.add_track(
             FloatTrack(
                 base_node_path.new_copy('fov'),

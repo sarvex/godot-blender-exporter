@@ -17,15 +17,15 @@ class ShaderFunction:
     def __init__(self, code):
         # at most one group
         self.code = code
-        self.in_param_types = list()
-        self.out_param_types = list()
+        self.in_param_types = []
+        self.out_param_types = []
 
         matched_group = FUNCTION_HEAD_PATTERN.findall(code)[0]
         self.name = matched_group[0]
         parameters_str = matched_group[1]
 
         for param_str in parameters_str.strip().split(','):
-            tokens = tuple([x.strip() for x in param_str.split()])
+            tokens = tuple(x.strip() for x in param_str.split())
             if tokens[0] == 'out':
                 self.out_param_types.append(tokens[1])
             else:  # 'in', 'inout'
@@ -974,15 +974,15 @@ def convert_node_to_function_name(node):
     if node.bl_idname == 'ShaderNodeMath':
         operation = node.operation.lower()
         if node.use_clamp:
-            return function_name_base + "_" + operation + "_clamp"
-        return function_name_base + "_" + operation + "_no_clamp"
+            return f"{function_name_base}_{operation}_clamp"
+        return f"{function_name_base}_{operation}_no_clamp"
 
     if node.bl_idname == 'ShaderNodeVectorMath':
         operation = node.operation.lower()
-        return function_name_base + "_" + operation
+        return f"{function_name_base}_{operation}"
 
     if node.bl_idname == 'ShaderNodeNormalMap':
-        return function_name_base + "_" + node.space.lower()
+        return f"{function_name_base}_{node.space.lower()}"
 
     return function_name_base
 
@@ -999,9 +999,7 @@ def find_node_function(node):
     function = FUNCTION_NAME_MAPPING.get(function_name, None)
     if function is None:
         raise ValidationError(
-            "Node with type '{}' at '{}' is not supported".format(
-                node.bl_idname, node.name
-            )
+            f"Node with type '{node.bl_idname}' at '{node.name}' is not supported"
         )
     return function
 

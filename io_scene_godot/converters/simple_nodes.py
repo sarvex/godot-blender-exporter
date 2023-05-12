@@ -57,11 +57,7 @@ def export_camera_node(escn_file, export_settings, node, parent_gd_node):
         blender_attr, gd_attr, converter = item
         cam_node[gd_attr] = converter(getattr(camera, blender_attr))
 
-    if camera.type == "PERSP":
-        cam_node['projection'] = 0
-    else:
-        cam_node['projection'] = 1
-
+    cam_node['projection'] = 0 if camera.type == "PERSP" else 1
     # `fov` does not go into `attribute_conversion`, because it can not
     # be animated
     cam_node['fov'] = math.degrees(camera.angle)
@@ -223,7 +219,7 @@ def export_curve_node(escn_file, export_settings, node, parent_gd_node):
         if spline.type == "BEZIER":
             curve_id = _export_spline(escn_file, splines[0], node.data.name)
             if spline == splines.active:
-                path_node["curve"] = "SubResource({})".format(curve_id)
+                path_node["curve"] = f"SubResource({curve_id})"
 
         # Create child MeshInstance renders the bevel for any curve type
         mesh_node = export_mesh_node(

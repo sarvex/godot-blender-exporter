@@ -47,7 +47,7 @@ def export_multimesh_node(escn_file, export_settings,
         if _ps == obj_eval.particle_systems.active:
             multimeshid_active = multimeshid
 
-    multimeshnode['multimesh'] = 'SubResource({})'.format(multimeshid_active)
+    multimeshnode['multimesh'] = f'SubResource({multimeshid_active})'
     multimeshnode['visible'] = obj.visible_get()
 
     escn_file.add_node(multimeshnode)
@@ -92,14 +92,11 @@ class MultiMeshResourceExporter:
         multimesh = converter.to_multimesh()
         if multimesh is not None:
             self.mesh_resource = MultiMeshResource(particle_name)
-            self.mesh_resource['instance_count'] = '{}'.format(
-                len(self.particle_system.particles))
-            self.mesh_resource['mesh'] = 'SubResource({})'.format(
-                self.instance_mesh_id)
-            self.mesh_resource['transform_array'] = (
-                'PoolVector3Array({})'.format(
-                    converter.to_multimesh())
-                )
+            self.mesh_resource['instance_count'] = f'{len(self.particle_system.particles)}'
+            self.mesh_resource['mesh'] = f'SubResource({self.instance_mesh_id})'
+            self.mesh_resource[
+                'transform_array'
+            ] = f'PoolVector3Array({converter.to_multimesh()})'
 
             multimesh_id = escn_file.add_internal_resource(
                 self.mesh_resource, key)

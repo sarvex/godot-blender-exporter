@@ -53,18 +53,19 @@ class ObjectAnimationExporter:
     def check_baking_condition(self, action_type):
         """Check whether the animated object has any constraint and
         thus need to do baking, if needs, some states would be set"""
-        if action_type == 'transform':
-            has_obj_cst = check_object_constraint(self.blender_object)
-            has_pose_cst = check_pose_constraint(self.blender_object)
-            has_non_inherit_bone = False
-            if isinstance(self.blender_object.data, bpy.types.Armature):
-                for rbone in self.blender_object.data.bones:
-                    if (rbone.use_inherit_rotation is False or
-                            rbone.use_inherit_scale is False):
-                        has_non_inherit_bone = True
-                        break
-            self.need_baking = (
-                has_obj_cst or has_pose_cst or has_non_inherit_bone)
+        if action_type != 'transform':
+            return
+        has_obj_cst = check_object_constraint(self.blender_object)
+        has_pose_cst = check_pose_constraint(self.blender_object)
+        has_non_inherit_bone = False
+        if isinstance(self.blender_object.data, bpy.types.Armature):
+            for rbone in self.blender_object.data.bones:
+                if (rbone.use_inherit_rotation is False or
+                        rbone.use_inherit_scale is False):
+                    has_non_inherit_bone = True
+                    break
+        self.need_baking = (
+            has_obj_cst or has_pose_cst or has_non_inherit_bone)
 
     def preprocess_nla_tracks(self, blender_object):
         """Iterative through nla tracks, separately store mute and unmuted
@@ -86,7 +87,7 @@ class ObjectAnimationExporter:
         if active_action is None:
             # object has constraints on other objects
             assert self.need_baking
-            anim_rsc_name = self.blender_object.name + 'Action'
+            anim_rsc_name = f'{self.blender_object.name}Action'
         else:
             anim_rsc_name = active_action.name
 
@@ -125,7 +126,7 @@ class ObjectAnimationExporter:
         Note that it would not do baking for constraint"""
         if self.animation_player.active_animation is None:
             self.animation_player.add_active_animation_resource(
-                escn_file, self.blender_object.name + 'Action'
+                escn_file, f'{self.blender_object.name}Action'
             )
 
         for track in self.unmute_nla_tracks:

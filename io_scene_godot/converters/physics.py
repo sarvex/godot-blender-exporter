@@ -57,7 +57,7 @@ def get_extents(node):
 def export_collision_shape(escn_file, export_settings, node, parent_gd_node,
                            parent_override=None):
     """Exports the collision primitives/geometry"""
-    col_name = node.name + 'Collision'
+    col_name = f'{node.name}Collision'
     col_node = NodeTemplate(col_name, "CollisionShape", parent_gd_node)
 
     if parent_override is None:
@@ -83,7 +83,7 @@ def export_collision_shape(escn_file, export_settings, node, parent_gd_node,
             )
 
         if shape_id is not None:
-            col_node['shape'] = "SubResource({})".format(shape_id)
+            col_node['shape'] = f"SubResource({shape_id})"
     else:
         bounds = get_extents(node)
         if rbd.collision_shape == "BOX":
@@ -104,7 +104,7 @@ def export_collision_shape(escn_file, export_settings, node, parent_gd_node,
         else:
             logging.warning("Unable to export physics shape for %s", node.name)
 
-        col_node['shape'] = "SubResource({})".format(shape_id)
+        col_node['shape'] = f"SubResource({shape_id})"
         if col_shape is not None and rbd.use_margin:
             col_shape['margin'] = rbd.collision_margin
 
@@ -125,7 +125,7 @@ class MeshCollisionShapeKey:
         if bl_object.rigid_body.use_margin:
             margin = bl_object.rigid_body.collision_margin
 
-        self._data = tuple((margin, mesh_data_key))
+        self._data = margin, mesh_data_key
 
     def __hash__(self):
         return hash(self._data)
@@ -181,12 +181,12 @@ def generate_concave_shape(escn_file, export_settings, bl_object):
         calculate_tangents=False
     )
     if mesh is not None and mesh.polygons:
-        vert_array = list()
+        vert_array = []
         mesh.calc_loop_triangles()
         for tri in mesh.loop_triangles:
-            for vert_id in reversed(tri.vertices):
-                vert_array.append(mesh.vertices[vert_id].co)
-
+            vert_array.extend(
+                mesh.vertices[vert_id].co for vert_id in reversed(tri.vertices)
+            )
         col_shape = InternalResource("ConcavePolygonShape", mesh.name)
         col_shape['data'] = Array("PoolVector3Array(", values=vert_array)
 
@@ -205,14 +205,11 @@ def export_physics_controller(escn_file, export_settings, node,
     """Exports the physics body "type" as a separate node. In blender, the
     physics body type and the collision shape are one object, in godot they
     are two. This is the physics body type"""
-    phys_name = node.name + 'Physics'
+    phys_name = f'{node.name}Physics'
 
     rbd = node.rigid_body
     if rbd.type == "ACTIVE":
-        if rbd.kinematic:
-            phys_controller = 'KinematicBody'
-        else:
-            phys_controller = 'RigidBody'
+        phys_controller = 'KinematicBody' if rbd.kinematic else 'RigidBody'
     else:
         phys_controller = 'StaticBody'
 
@@ -220,17 +217,17 @@ def export_physics_controller(escn_file, export_settings, node,
 
     if phys_controller != 'KinematicBody':
         physics_mat = InternalResource(
-            "PhysicsMaterial", node.name + "PhysicsMaterial"
+            "PhysicsMaterial", f"{node.name}PhysicsMaterial"
         )
         physics_mat['friction'] = rbd.friction
         physics_mat['bounce'] = rbd.restitution
         rid = escn_file.force_add_internal_resource(physics_mat)
-        phys_obj['physics_material_override'] = "SubResource({})".format(rid)
+        phys_obj['physics_material_override'] = f"SubResource({rid})"
 
-    col_groups = 0
-    for offset, flag in enumerate(rbd.collision_collections):
-        col_groups += (1 if flag else 0) << offset
-
+    col_groups = sum(
+        (1 if flag else 0) << offset
+        for offset, flag in enumerate(rbd.collision_collections)
+    )
     phys_obj['transform'] = node.matrix_local
     phys_obj['collision_layer'] = col_groups
     phys_obj['collision_mask'] = col_groups

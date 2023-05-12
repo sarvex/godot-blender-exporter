@@ -47,12 +47,12 @@ def export_material(escn_file, export_settings, bl_object, material):
                 external_material[1]  # Material Type
             )
             resource_id = escn_file.add_external_resource(ext_mat, material)
-        return "ExtResource({})".format(resource_id)
+        return f"ExtResource({resource_id})"
 
     resource_id = generate_material_resource(
         escn_file, export_settings, bl_object, material
     )
-    return "SubResource({})".format(resource_id)
+    return f"SubResource({resource_id})"
 
 
 def export_as_spatial_material(material_rsc_name, material):
@@ -96,8 +96,8 @@ def export_as_spatial_material(material_rsc_name, material):
         mat["clearcoat"] = val("Clearcoat")
         mat["clearcoat_gloss"] = 1.0 - val("Clearcoat Roughness")
 
-        mat["emission_enabled"] = any(val("Emission")[0:3])
-        mat["emission_energy"] = 1.0 * any(val("Emission")[0:3])
+        mat["emission_enabled"] = any(val("Emission")[:3])
+        mat["emission_energy"] = 1.0 * any(val("Emission")[:3])
         mat["emission"] = gamma_correct(val("Emission"))
 
         mat["subsurf_scatter_enabled"] = val("Subsurface") > 0
@@ -152,13 +152,12 @@ def generate_material_resource(escn_file, export_settings, bl_object,
 def _find_material_in_subtree(folder, material):
     """Searches for godot materials that match a blender material. If found,
     it returns (path, type) otherwise it returns None"""
-    candidates = []
-
-    material_file_name = material.name + '.tres'
-    for dir_path, _subdirs, files in os.walk(folder):
-        if material_file_name in files:
-            candidates.append(os.path.join(dir_path, material_file_name))
-
+    material_file_name = f'{material.name}.tres'
+    candidates = [
+        os.path.join(dir_path, material_file_name)
+        for dir_path, _subdirs, files in os.walk(folder)
+        if material_file_name in files
+    ]
     # Checks it is a material and finds out what type
     valid_candidates = []
     for candidate in candidates:

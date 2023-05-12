@@ -16,8 +16,7 @@ def export_escn(out_file, config):
 
 
 def main():
-    dir_queue = list()
-    dir_queue.append('.')
+    dir_queue = ['.']
     while dir_queue:
         dir_relpath = dir_queue.pop(0)
 
@@ -42,7 +41,7 @@ def main():
             elif item_abspath.endswith('blend'):
                 # export blend file
                 print("---------")
-                print("Exporting {}".format(os.path.abspath(item_abspath)))
+                print(f"Exporting {os.path.abspath(item_abspath)}")
                 bpy.ops.wm.open_mainfile(filepath=item_abspath)
 
                 out_path = os.path.join(
@@ -51,7 +50,7 @@ def main():
                     item.replace('.blend', '.escn')
                     )
                 export_escn(out_path, config)
-                print("Exported to {}".format(os.path.abspath(out_path)))
+                print(f"Exported to {os.path.abspath(out_path)}")
 
 
 def run_with_abort(function):

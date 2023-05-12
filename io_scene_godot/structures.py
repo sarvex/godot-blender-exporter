@@ -118,14 +118,14 @@ class FileEntry(collections.OrderedDict):
 
     def generate_heading_string(self):
         """Convert the heading dict into [type key=val key=val ...]"""
-        out_str = '[{}'.format(self.entry_type)
+        out_str = f'[{self.entry_type}'
         for var in self.heading:
             val = self.heading[var]
 
             if isinstance(val, str):
-                val = '"{}"'.format(val)
+                val = f'"{val}"'
 
-            out_str += " {}={}".format(var, val)
+            out_str += f" {var}={val}"
         out_str += ']'
         return out_str
 
@@ -136,17 +136,16 @@ class FileEntry(collections.OrderedDict):
         for var in self:
             val = self[var]
             val = to_string(val)
-            lines.append('{} = {}'.format(var, val))
+            lines.append(f'{var} = {val}')
         return "\n".join(lines)
 
     def to_string(self):
         """Serialize this entire entry"""
         heading = self.generate_heading_string()
-        body = self.generate_body_string()
-        if body and self.contents:
-            return "{}\n\n{}\n{}".format(heading, body, self.contents)
-        if body:
-            return "{}\n\n{}".format(heading, body)
+        if body := self.generate_body_string():
+            if self.contents:
+                return f"{heading}\n\n{body}\n{self.contents}"
+            return f"{heading}\n\n{body}"
         return heading
 
 
@@ -251,9 +250,7 @@ class InternalResource(FileEntry):
                 ('type', resource_type)
             ))
         )
-        self['resource_name'] = '"{}"'.format(
-            name.replace('.', '').replace('/', '')
-        )
+        self['resource_name'] = f""""{name.replace('.', '').replace('/', '')}\""""
 
 
 class Array(list):
@@ -282,11 +279,7 @@ class Array(list):
 
     def to_string(self):
         """Convert the array to serialized form"""
-        return "{}{}{}".format(
-            self.prefix,
-            self.seperator.join([to_string(v) for v in self]),
-            self.suffix
-        )
+        return f"{self.prefix}{self.seperator.join([to_string(v) for v in self])}{self.suffix}"
 
 
 class Map(collections.OrderedDict):
@@ -300,10 +293,10 @@ class Map(collections.OrderedDict):
 
     def to_string(self):
         """Convert the map to serialized form"""
-        return ("{\n\t" +
-                ',\n\t'.join(['"{}":{}'.format(k, to_string(v))
-                              for k, v in self.items()]) +
-                "\n}")
+        return (
+            "{\n\t"
+            + ',\n\t'.join([f'"{k}":{to_string(v)}' for k, v in self.items()])
+        ) + "\n}"
 
 
 class NodePath:
@@ -328,10 +321,7 @@ class NodePath:
 
     def to_string(self):
         """Serialize a node path"""
-        return 'NodePath("{}:{}")'.format(
-            self.relative_path,
-            self.attribute_name
-        )
+        return f'NodePath("{self.relative_path}:{self.attribute_name}")'
 
 
 class RGBA:
@@ -410,13 +400,13 @@ def gamma_correct(color):
 
     # mathutils.Color does not support alpha yet, so just use RGB
     # see: https://developer.blender.org/T53540
-    color = color[0:3]
+    color = color[:3]
     # note that here use a widely mentioned sRGB approximation gamma = 2.2
     # it is good enough, the exact gamma of sRGB can be find at
     # https://en.wikipedia.org/wiki/SRGB
     if len(color) > 3:
         color = color[:3]
-    return mathutils.Color(tuple([x ** (1 / 2.2) for x in color]))
+    return mathutils.Color(tuple(x ** (1 / 2.2) for x in color))
 
 
 # ------------------ Implicit Conversions of Blender Types --------------------
@@ -439,26 +429,19 @@ def color_to_string(rgba):
     """Converts an RGB colors in range 0-1 into a fomat Godot can read. Accepts
     iterables of 3 or 4 in length, but is designed for mathutils.Color"""
     alpha = 1.0 if len(rgba) < 4 else rgba[3]
-    col = list(rgba[0:3]) + [alpha]
+    col = list(rgba[:3]) + [alpha]
     return Array('Color(', values=[col]).to_string()
 
 
 def vector_to_string(vec):
     """Encode a mathutils.vector. actually, it accepts iterable of any length,
     but 2, 3 are best...."""
-    return Array('Vector{}('.format(len(vec)), values=[vec]).to_string()
+    return Array(f'Vector{len(vec)}(', values=[vec]).to_string()
 
 
 def float_to_string(num):
     """Intelligently rounds float numbers"""
-    if abs(num) < 1e-15:
-        # This should make floating point errors round sanely. It does mean
-        # that if you have objects with large scaling factors and tiny meshes,
-        # then the object may "collapse" to zero.
-        # There are still some e-8's that appear in the file, but I think
-        # people would notice it collapsing.
-        return '0.0'
-    return '{:.6}'.format(num)
+    return '0.0' if abs(num) < 1e-15 else '{:.6}'.format(num)
 
 
 def to_string(val):
@@ -468,11 +451,7 @@ def to_string(val):
         val = val.to_string()
     else:
         converter = CONVERSIONS.get(type(val))
-        if converter is not None:
-            val = converter(val)
-        else:
-            val = str(val)
-
+        val = converter(val) if converter is not None else str(val)
     return val
 
 

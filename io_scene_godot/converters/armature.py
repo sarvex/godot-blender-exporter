@@ -6,20 +6,23 @@ from ..structures import NodeTemplate, NodePath, Array
 def export_bone_attachment(escn_file, export_settings,
                            bl_object, parent_gd_node):
     """Export a blender object with parent_bone to a BoneAttachment"""
-    bone_attachment = NodeTemplate(bl_object.parent_bone + 'BoneAttachment',
-                                   'BoneAttachment', parent_gd_node)
+    bone_attachment = NodeTemplate(
+        f'{bl_object.parent_bone}BoneAttachment',
+        'BoneAttachment',
+        parent_gd_node,
+    )
 
     # node.parent_bone is exactly the bone name
     # in the parent armature node
-    bone_attachment['bone_name'] = "\"{}\"".format(
-        parent_gd_node.find_bone_name(bl_object.parent_bone)
-    )
+    bone_attachment[
+        'bone_name'
+    ] = f'\"{parent_gd_node.find_bone_name(bl_object.parent_bone)}\"'
 
     # parent_gd_node is the SkeletonNode with the parent bone
     bone_id = parent_gd_node.find_bone_id(bl_object.parent_bone)
 
     # append node to its parent bone's bound_children list
-    parent_gd_node["bones/{}/{}".format(bone_id, 'bound_children')].append(
+    parent_gd_node[f"bones/{bone_id}/bound_children"].append(
         NodePath(parent_gd_node.get_path(), bone_attachment.get_path())
     )
 
@@ -40,16 +43,17 @@ class Bone:
 
 def should_export(export_settings, armature_obj, rest_bone):
     """Return a bool indicates whether a bone should be exported"""
-    # if bone has a child object, it must exported
-    for child in armature_obj.children:
-        if child.parent_bone == rest_bone.name:
-            return True
-
-    if not (export_settings['use_exclude_ctrl_bone'] and
-            not rest_bone.use_deform):
-        return True
-
-    return False
+    return next(
+        (
+            True
+            for child in armature_obj.children
+            if child.parent_bone == rest_bone.name
+        ),
+        bool(
+            not export_settings['use_exclude_ctrl_bone']
+            or rest_bone.use_deform
+        ),
+    )
 
 
 def export_bone(pose_bone, bones_mapping):
@@ -105,7 +109,7 @@ def ordered_bones(bones):
 def generate_bones_mapping(export_settings, armature_obj):
     """Return a dict mapping blender bone name to godot bone id"""
     bone_id = 0
-    bones_mapping = dict()
+    bones_mapping = {}
 
     # Iterate in actual armature hierarchy order
     for pose_bone in ordered_bones(armature_obj.pose.bones):
@@ -128,7 +132,7 @@ class SkeletonNode(NodeTemplate):
         # Usually we should not keep information in the godot node
         # instance, but Skeleton is a special case, we need to reference
         # some bone information when dealing with Animation
-        self._bones_mapping = dict()
+        self._bones_mapping = {}
 
     def set_bones_mapping(self, bones_mapping):
         """set blender bone name to godot bone id map"""
@@ -160,7 +164,7 @@ def export_armature_node(escn_file, export_settings,
     bones_mapping = generate_bones_mapping(export_settings, armature_obj)
     skeleton_node.set_bones_mapping(bones_mapping)
 
-    gd_bone_list = list()
+    gd_bone_list = []
     for pose_bone in armature_obj.pose.bones:
         if pose_bone.name in bones_mapping:
             gd_bone = export_bone(pose_bone, bones_mapping)
@@ -181,16 +185,16 @@ def export_armature_node(escn_file, export_settings,
 
         bone_name_set.add(gd_bone.name)
 
-        bone_prefix = 'bones/{}'.format(gd_bone.id)
+        bone_prefix = f'bones/{gd_bone.id}'
         # bone name must be the first property
-        skeleton_node[bone_prefix + '/name'] = '"{}"'.format(gd_bone.name)
-        skeleton_node[bone_prefix + '/parent'] = \
-            bones_mapping.get(gd_bone.parent_name, -1)
-        skeleton_node[bone_prefix + '/rest'] = gd_bone.rest
-        skeleton_node[bone_prefix + '/pose'] = gd_bone.pose
-        skeleton_node[bone_prefix + '/enabled'] = True
-        skeleton_node[bone_prefix + '/bound_children'] = \
-            Array(prefix='[', suffix=']')
+        skeleton_node[f'{bone_prefix}/name'] = f'"{gd_bone.name}"'
+        skeleton_node[f'{bone_prefix}/parent'] = bones_mapping.get(
+            gd_bone.parent_name, -1
+        )
+        skeleton_node[f'{bone_prefix}/rest'] = gd_bone.rest
+        skeleton_node[f'{bone_prefix}/pose'] = gd_bone.pose
+        skeleton_node[f'{bone_prefix}/enabled'] = True
+        skeleton_node[f'{bone_prefix}/bound_children'] = Array(prefix='[', suffix=']')
 
     escn_file.add_node(skeleton_node)
 

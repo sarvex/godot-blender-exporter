@@ -14,28 +14,22 @@ def blender_value_to_string(blender_value):
     """convert blender socket.default_value to shader script"""
     if isinstance(blender_value,
                   (bpy.types.bpy_prop_array, mathutils.Vector)):
-        tmp = list()
-        for val in blender_value:
-            tmp.append(str(val))
-
+        tmp = [str(val) for val in blender_value]
         return "vec%d(%s)" % (len(tmp), ", ".join(tmp))
 
     if isinstance(blender_value, mathutils.Euler):
-        return "vec3(%s)" % ', '.join([str(d) for d in blender_value])
+        return f"vec3({', '.join([str(d) for d in blender_value])})"
 
     if isinstance(blender_value, mathutils.Matrix):
         # godot mat is column major order
         mat = blender_value.transposed()
-        column_vec_list = list()
-        for vec in mat:
-            column_vec_list.append(blender_value_to_string(vec))
-
+        column_vec_list = [blender_value_to_string(vec) for vec in mat]
         return "mat%d(%s)" % (
             len(column_vec_list),
             ", ".join(column_vec_list)
         )
 
-    return "float(%s)" % blender_value
+    return f"float({blender_value})"
 
 
 def socket_to_type_string(socket):
@@ -49,7 +43,7 @@ def socket_to_type_string(socket):
     if socket.type == 'VALUE':
         return 'float'
 
-    assert False, 'Unknown type %s' % socket.type
+    assert False, f'Unknown type {socket.type}'
     return None
 
 
@@ -150,26 +144,21 @@ class NodeConverterBase:
     AABB_UVW = "AABB_UVW"
 
     def __init__(self, index, bl_node):
-        self.in_sockets_map = dict()
-        self.out_sockets_map = dict()
+        self.in_sockets_map = {}
+        self.out_sockets_map = {}
 
         self._defined_ids = set()
 
         self.functions = set()
-        self.textures = list()
-        self.local_code = list()
-        self.input_definitions = list()
-        self.output_definitions = list()
-
-        self.input_definitions.append("// input sockets handling")
-        self.output_definitions.append("// output sockets definitions")
-        self.local_code.append("\n")
-
+        self.textures = []
+        self.input_definitions = ["// input sockets handling"]
+        self.output_definitions = ["// output sockets definitions"]
+        self.local_code = ["\n"]
         # flags
         self.flags = ShadingFlags()
 
         self.bl_node = bl_node
-        self._id_prefix = "node%s_" % index
+        self._id_prefix = f"node{index}_"
 
         self.variable_count = 0
         self.input_var_count = 0
@@ -198,20 +187,20 @@ class NodeConverterBase:
         else:
             socket_prefix = 'in%d_' % self.input_var_count
             self.input_var_count += 1
-        ret_id = self._id_prefix + filter_id_illegal_char(
-            socket.name + '_' + socket_prefix + shader_prop_name)
-        return ret_id
+        return self._id_prefix + filter_id_illegal_char(
+            f'{socket.name}_{socket_prefix}{shader_prop_name}'
+        )
 
     def generate_variable_id_str(self, hint):
         """generate variable name for tmp variable"""
-        var_prefix = "var%s_" % self.variable_count
+        var_prefix = f"var{self.variable_count}_"
         self.variable_count += 1
         return self._id_prefix + var_prefix + filter_id_illegal_char(hint)
 
     def generate_tmp_texture_id(self, hashable_key):
         """generate a temp variable for texture, later it would be replaced
         by uniform var"""
-        var_prefix = "tex%s_" % hash(hashable_key)
+        var_prefix = f"tex{hash(hashable_key)}_"
         return self._id_prefix + filter_id_illegal_char(var_prefix)
 
     def generate_socket_assignment(self, to_socket_id, to_socket_type,
@@ -219,32 +208,31 @@ class NodeConverterBase:
         # pylint: disable-msg=too-many-return-statements
         """assign a socket variable to another, it handles type conversion"""
         if to_socket_type == from_socket_type:
-            return "%s = %s" % (to_socket_id, from_socket_id)
+            return f"{to_socket_id} = {from_socket_id}"
 
-        if to_socket_type == 'VALUE' and from_socket_type == 'VECTOR':
-            return "%s = dot(%s, vec3(0.333333, 0.333333, 0.333333))" \
-                % (to_socket_id, from_socket_id)
+        if to_socket_type == 'VALUE':
+            if from_socket_type == 'VECTOR':
+                return f"{to_socket_id} = dot({from_socket_id}, vec3(0.333333, 0.333333, 0.333333))"
 
-        if to_socket_type == 'VALUE' and from_socket_type == 'RGBA':
-            return "%s = dot(%s.rgb, vec3(0.2126, 0.7152, 0.0722))" \
-                % (to_socket_id, from_socket_id)
+            if from_socket_type == 'RGBA':
+                return f"{to_socket_id} = dot({from_socket_id}.rgb, vec3(0.2126, 0.7152, 0.0722))"
 
         if to_socket_type == 'VECTOR' and from_socket_type == 'VALUE':
             return "%s = vec3(%s, %s, %s)" \
-                % ((to_socket_id,) + (from_socket_id, ) * 3)
+                    % ((to_socket_id,) + (from_socket_id, ) * 3)
 
-        if to_socket_type == 'RGBA' and from_socket_type == 'VALUE':
-            return "%s = vec4(%s, %s, %s, %s)" \
-                % ((to_socket_id,) + (from_socket_id, ) * 4)
+        if to_socket_type == 'RGBA':
+            if from_socket_type == 'VALUE':
+                return "%s = vec4(%s, %s, %s, %s)" \
+                        % ((to_socket_id,) + (from_socket_id, ) * 4)
 
-        if to_socket_type == 'RGBA' and from_socket_type == 'VECTOR':
-            return "%s = vec4(%s, 1.0)" % (to_socket_id, from_socket_id)
+            if from_socket_type == 'VECTOR':
+                return f"{to_socket_id} = vec4({from_socket_id}, 1.0)"
 
         if to_socket_type == 'VECTOR' and from_socket_type == 'RGBA':
-            return "%s = %s.rgb" % (to_socket_id, from_socket_id)
+            return f"{to_socket_id} = {from_socket_id}.rgb"
 
-        assert False, "Cannot link sockets '%s' and '%s'" % (
-            to_socket_id, from_socket_id)
+        assert False, f"Cannot link sockets '{to_socket_id}' and '{from_socket_id}'"
         return ""
 
     def mix_frag_shader_link(self, input_a, input_b, output, fac):
@@ -271,10 +259,7 @@ class NodeConverterBase:
             mix_result_id = self.generate_shader_id_str(output_socket, pname)
             if prop_a is not None and prop_b is not None:
                 ptype = FragmentShaderLink.get_property_type(pname)
-                self.local_code.append(
-                    "%s = mix(%s, %s, %s)"
-                    % (mix_result_id, prop_a, prop_b, fac)
-                )
+                self.local_code.append(f"{mix_result_id} = mix({prop_a}, {prop_b}, {fac})")
 
                 output.set_property(pname, mix_result_id)
             elif prop_a is not None:
@@ -287,10 +272,7 @@ class NodeConverterBase:
         self.functions.add(function)
 
         self.local_code.append(
-            "%s(%s);" % (
-                function.name,
-                ', '.join([str(x) for x in in_args + out_args]),
-            )
+            f"{function.name}({', '.join([str(x) for x in in_args + out_args])});"
         )
 
     def yup_to_zup(self, var):
@@ -358,7 +340,7 @@ class NodeConverterBase:
     def location_to_mat(self, loc_vec):
         """Convert a vec3 location to homogeneous space mat4 representation"""
         loc_mat = self.generate_variable_id_str("location")
-        self.local_code.append("mat4 %s" % loc_mat)
+        self.local_code.append(f"mat4 {loc_mat}")
         function = find_function_by_name("location_to_mat4")
         self.add_function_call(function, [loc_vec], [loc_mat])
         return loc_mat
@@ -366,7 +348,7 @@ class NodeConverterBase:
     def rotation_to_mat(self, rot_vec):
         """Convert a euler angle XYZ rotation to mat4 representation"""
         rot_mat = self.generate_variable_id_str("rotation")
-        self.local_code.append("mat4 %s" % rot_mat)
+        self.local_code.append(f"mat4 {rot_mat}")
         function = find_function_by_name("euler_angle_XYZ_to_mat4")
         self.add_function_call(function, [rot_vec], [rot_mat])
         return rot_mat
@@ -374,7 +356,7 @@ class NodeConverterBase:
     def scale_to_mat(self, scale_vec):
         """Convert a vec3 scale to mat4"""
         sca_mat = self.generate_variable_id_str("scale")
-        self.local_code.append("mat4 %s" % sca_mat)
+        self.local_code.append(f"mat4 {sca_mat}")
         function = find_function_by_name("scale_to_mat4")
         self.add_function_call(function, [scale_vec], [sca_mat])
         return sca_mat
@@ -400,9 +382,7 @@ class NodeConverterBase:
                 from_socket_id = from_converter.out_sockets_map[from_socket]
                 inter_socket_assign_str = self.generate_socket_assignment(
                     id_str, socket.type, from_socket_id, from_socket.type)
-                self.input_definitions.append(
-                    "%s %s" % (type_str, inter_socket_assign_str)
-                )
+                self.input_definitions.append(f"{type_str} {inter_socket_assign_str}")
 
         if use_default_value:
             if socket.name == 'Normal':
@@ -411,9 +391,7 @@ class NodeConverterBase:
                 value_str = 'TANGENT'
             else:
                 value_str = blender_value_to_string(socket.default_value)
-            self.input_definitions.append(
-                "%s %s = %s" % (type_str, id_str, value_str)
-            )
+            self.input_definitions.append(f"{type_str} {id_str} = {value_str}")
 
     def _initialize_shader_in_socket(self, socket, blnode_to_converter_map):
         in_shader_link = None
@@ -434,7 +412,7 @@ class NodeConverterBase:
                 socket, FragmentShaderLink.ALBEDO)
             self.in_sockets_map[socket] = in_shader_link
             self.input_definitions.append(
-                "vec3 %s = vec3(0.0, 0.0, 0.0)" % in_shader_link.albedo
+                f"vec3 {in_shader_link.albedo} = vec3(0.0, 0.0, 0.0)"
             )
 
         for pname in FragmentShaderLink.ALL_PROPERTIES:
@@ -445,7 +423,7 @@ class NodeConverterBase:
                 cur_prop_type = FragmentShaderLink.get_property_type(pname)
                 in_shader_link.set_property(pname, cur_prop_id)
                 self.input_definitions.append(
-                    "%s %s = %s" % (cur_prop_type, cur_prop_id, from_prop_id)
+                    f"{cur_prop_type} {cur_prop_id} = {from_prop_id}"
                 )
 
     def initialize_inputs(self, blnode_to_converter_map):
@@ -465,7 +443,7 @@ class NodeConverterBase:
         # may not feasible to supported in godot. Here only export
         # those registed in `out_sockets_map`. Registering is done in
         # `parse_node_to_fragment` or `parse_node_to_vertex`
-        id_to_define = list()
+        id_to_define = []
         for out_socket in self.bl_node.outputs:
             var = self.out_sockets_map.get(out_socket, None)
             if var is not None:
@@ -485,9 +463,7 @@ class NodeConverterBase:
             assert isinstance(id_str, str) and id_str.isidentifier()
             if id_str not in self._defined_ids:
                 self._defined_ids.add(id_str)
-                self.output_definitions.append(
-                    "%s %s" % (type_str, id_str)
-                )
+                self.output_definitions.append(f"{type_str} {id_str}")
 
     def parse_node_to_fragment(self):
         """Parse the node to generate fragment shader script"""
@@ -564,7 +540,7 @@ class BsdfNodeConverter(NodeConverterBase):
             self.flags.glass = True
 
         if self.bl_node.bl_idname in \
-                ('ShaderNodeBsdfTransparent', 'ShaderNodeBsdfGlass'):
+                    ('ShaderNodeBsdfTransparent', 'ShaderNodeBsdfGlass'):
             self.flags.transparent = True
 
         tangent_socket = self.bl_node.inputs.get('Tangent', None)
@@ -578,8 +554,8 @@ class BsdfNodeConverter(NodeConverterBase):
             self.flags.transmission_used = True
 
         function = find_node_function(self.bl_node)
-        func_in_args = list()
-        func_out_args = list()
+        func_in_args = []
+        func_out_args = []
 
         for socket_name in function.in_sockets:
             socket = self.bl_node.inputs[socket_name]
@@ -624,7 +600,7 @@ class BumpNodeConverter(NodeConverterBase):
     def parse_node_to_fragment(self):
         function = find_node_function(self.bl_node)
 
-        in_arguments = list()
+        in_arguments = []
         for socket in self.bl_node.inputs:
             socket_var = self.in_sockets_map[socket]
             if socket.name in ('Height_dx', 'Height_dy'):
@@ -655,33 +631,25 @@ class NormalMapNodeConverter(NodeConverterBase):
     def parse_node_to_fragment(self):
         function = find_node_function(self.bl_node)
 
-        in_arguments = list()
-        for socket in self.bl_node.inputs:
-            in_arguments.append(self.in_sockets_map[socket])
-
+        in_arguments = [self.in_sockets_map[socket] for socket in self.bl_node.inputs]
         output_socket = self.bl_node.outputs[0]
         output_normal = self.generate_socket_id_str(output_socket)
         self.out_sockets_map[output_socket] = output_normal
         if self.bl_node.space == 'TANGENT':
-            in_arguments.append('NORMAL')
-            in_arguments.append('TANGENT')
-            in_arguments.append('BINORMAL')
+            in_arguments.extend(('NORMAL', 'TANGENT', 'BINORMAL'))
             self.add_function_call(function, in_arguments, [output_normal])
             self.view_to_world(output_normal)
             self.yup_to_zup(output_normal)
 
         elif self.bl_node.space == 'WORLD':
             self.flags.inv_view_mat_used = True
-            in_arguments.append('NORMAL')
-            in_arguments.append(self.INV_VIEW_MAT)
+            in_arguments.extend(('NORMAL', self.INV_VIEW_MAT))
             self.add_function_call(function, in_arguments, [output_normal])
             self.yup_to_zup(output_normal)
 
         elif self.bl_node.space == 'OBJECT':
             self.flags.inv_view_mat_used = True
-            in_arguments.append('NORMAL')
-            in_arguments.append(self.INV_VIEW_MAT)
-            in_arguments.append('WORLD_MATRIX')
+            in_arguments.extend(('NORMAL', self.INV_VIEW_MAT, 'WORLD_MATRIX'))
             self.add_function_call(function, in_arguments, [output_normal])
             self.yup_to_zup(output_normal)
 
@@ -698,30 +666,29 @@ class TexCoordNodeConverter(NodeConverterBase):
         uv_socket = self.bl_node.outputs['UV']
         if uv_socket.is_linked:
             uv_id = self.out_sockets_map[uv_socket]
-            self.local_code.append("%s = vec3(UV, 0.0)" % uv_id)
+            self.local_code.append(f"{uv_id} = vec3(UV, 0.0)")
 
         window_socket = self.bl_node.outputs['Window']
         if window_socket.is_linked:
             window_id = self.out_sockets_map[window_socket]
-            self.local_code.append("%s = vec3(SCREEN_UV, 0.0)" % window_id)
+            self.local_code.append(f"{window_id} = vec3(SCREEN_UV, 0.0)")
 
         camera_socket = self.bl_node.outputs['Camera']
         if camera_socket.is_linked:
             camera_id = self.out_sockets_map[camera_socket]
-            self.local_code.append(
-                "%s = vec3(VERTEX.xy, -VERTEX.z)" % camera_id)
+            self.local_code.append(f"{camera_id} = vec3(VERTEX.xy, -VERTEX.z)")
 
         normal_socket = self.bl_node.outputs['Normal']
         if normal_socket.is_linked:
             normal_id = self.out_sockets_map[normal_socket]
-            self.local_code.append('%s = NORMAL' % normal_id)
+            self.local_code.append(f'{normal_id} = NORMAL')
             self.view_to_model(normal_id)
             self.yup_to_zup(normal_id)
 
         obj_socket = self.bl_node.outputs['Object']
         if obj_socket.is_linked:
             object_id = self.out_sockets_map[obj_socket]
-            self.local_code.append('%s = VERTEX' % object_id)
+            self.local_code.append(f'{object_id} = VERTEX')
             self.view_to_model(object_id, False)
             self.yup_to_zup(object_id)
             self.out_sockets_map[obj_socket] = object_id
@@ -729,10 +696,7 @@ class TexCoordNodeConverter(NodeConverterBase):
         ref_socket = self.bl_node.outputs['Reflection']
         if ref_socket.is_linked:
             reflect_id = self.out_sockets_map[ref_socket]
-            self.local_code.append(
-                '%s = reflect(normalize(VERTEX), NORMAL)'
-                % reflect_id
-            )
+            self.local_code.append(f'{reflect_id} = reflect(normalize(VERTEX), NORMAL)')
             self.view_to_model(reflect_id)
             self.yup_to_zup(reflect_id)
             self.out_sockets_map[ref_socket] = reflect_id
@@ -741,7 +705,7 @@ class TexCoordNodeConverter(NodeConverterBase):
         if generated_socket.is_linked:
             generated_id = self.out_sockets_map[generated_socket]
             self.flags.aabb_tex_coord_used = True
-            self.local_code.append('%s = %s' % (generated_id, self.AABB_UVW))
+            self.local_code.append(f'{generated_id} = {self.AABB_UVW}')
             self.out_sockets_map[ref_socket] = generated_id
 
 
@@ -752,7 +716,7 @@ class RgbNodeConverter(NodeConverterBase):
         rgb_socket = self.bl_node.outputs[0]
         rgb_id = self.generate_socket_id_str(rgb_socket)
         rgb_value_str = blender_value_to_string(rgb_socket.default_value)
-        self.local_code.append("%s = %s" % (rgb_id, rgb_value_str))
+        self.local_code.append(f"{rgb_id} = {rgb_value_str}")
         self.out_sockets_map[rgb_socket] = rgb_id
 
 
@@ -760,29 +724,28 @@ class MixRgbNodeConverter(NodeConverterBase):
     """Converter for ShaderNodeMixRGB"""
 
     def parse_node_to_fragment(self):
-        fac_socket = self.bl_node.inputs['Fac']
         color1_socket = self.bl_node.inputs['Color1']
         color2_socket = self.bl_node.inputs['Color2']
 
+        fac_socket = self.bl_node.inputs['Fac']
         fac_id = self.in_sockets_map[fac_socket]
         color1_id = self.in_sockets_map[color1_socket]
         color2_id = self.in_sockets_map[color2_socket]
 
         blend_type = self.bl_node.blend_type.lower()
-        rgb_mix_func_name = 'node_mix_rgb_' + blend_type
+        rgb_mix_func_name = f'node_mix_rgb_{blend_type}'
 
         # clamp fac to (0, 1)
-        self.local_code.append("%s = clamp(%s, 0.0, 1.0)" % (fac_id, fac_id))
+        self.local_code.append(f"{fac_id} = clamp({fac_id}, 0.0, 1.0)")
 
         mix_func = find_function_by_name(rgb_mix_func_name)
         if mix_func is None:
             # TODO: support all the blend types
-            warning_str = 'blend type %s not supported at %s, fall back to ' \
-                'blend type MIX' % (self.bl_node.blend_type, self.bl_node.name)
+            warning_str = f'blend type {self.bl_node.blend_type} not supported at {self.bl_node.name}, fall back to blend type MIX'
             logging.warning(warning_str)
             # default blender type MIX
             mix_func = find_function_by_name('node_mix_rgb_mix')
-            self.local_code.append("// " + warning_str)
+            self.local_code.append(f"// {warning_str}")
         assert mix_func is not None
 
         out_color_socket = self.bl_node.outputs['Color']
@@ -793,8 +756,9 @@ class MixRgbNodeConverter(NodeConverterBase):
         self.add_function_call(mix_func, in_args, out_args)
 
         if self.bl_node.use_clamp:
-            self.local_code.append("%s = clamp(%s, vec4(0.0), vec4(1.0))"
-                                   % (out_color_id, out_color_id))
+            self.local_code.append(
+                f"{out_color_id} = clamp({out_color_id}, vec4(0.0), vec4(1.0))"
+            )
 
         self.out_sockets_map[out_color_socket] = out_color_id
 
@@ -806,7 +770,7 @@ class ValueNodeConverter(NodeConverterBase):
         value_socket = self.bl_node.outputs['Value']
         value_id = self.generate_socket_id_str(value_socket)
         value_str = blender_value_to_string(value_socket.default_value)
-        self.out_sockets_map[value_socket] = "%s = %s" % (value_id, value_str)
+        self.out_sockets_map[value_socket] = f"{value_id} = {value_str}"
 
 
 class ImageTextureNodeConverter(NodeConverterBase):
@@ -815,11 +779,10 @@ class ImageTextureNodeConverter(NodeConverterBase):
     def parse_node_to_fragment(self):
         function = find_node_function(self.bl_node)
 
-        in_arguments = list()
         tex_coord_socket = self.bl_node.inputs[0]
         tex_coord = self.in_sockets_map[tex_coord_socket]
         if not tex_coord_socket.is_linked:
-            self.local_code.append("%s = vec3(UV, 0.0)" % tex_coord)
+            self.local_code.append(f"{tex_coord} = vec3(UV, 0.0)")
 
         tex_var = self.generate_tmp_texture_id(self.bl_node.name)
         texture_hint = Texture.Hint.NONE
@@ -832,10 +795,8 @@ class ImageTextureNodeConverter(NodeConverterBase):
             Texture(self.bl_node.image, tex_var, hint=texture_hint)
         )
 
-        in_arguments.append(tex_coord)
-        in_arguments.append(tex_var)
-
-        out_arguments = list()
+        in_arguments = [tex_coord, tex_var]
+        out_arguments = []
 
         for socket in self.bl_node.outputs:
             output_var = self.generate_socket_id_str(socket)
@@ -854,8 +815,7 @@ class MappingNodeConverter(NodeConverterBase):
         output_socket = self.bl_node.outputs[0]
         out_vec = self.generate_socket_id_str(output_socket)
 
-        self.local_code.append("// Mapping type: %s" %
-                               self.bl_node.vector_type)
+        self.local_code.append(f"// Mapping type: {self.bl_node.vector_type}")
 
         # In Blender2.80 and before, input location, rotation and scale are
         # constants. Therefore, the final transform matrix can be compute in
@@ -892,14 +852,7 @@ class MappingNodeConverter(NodeConverterBase):
             use_min = 1.0 if self.bl_node.use_min else 0.0
             use_max = 1.0 if self.bl_node.use_max else 0.0
 
-            in_arguments = list()
-            in_arguments.append(in_vec)
-            in_arguments.append(transform_mat)
-            in_arguments.append(clamp_min)
-            in_arguments.append(clamp_max)
-            in_arguments.append(use_min)
-            in_arguments.append(use_max)
-
+            in_arguments = [in_vec, transform_mat, clamp_min, clamp_max, use_min, use_max]
             self.add_function_call(function, in_arguments, [out_vec])
 
         else:
@@ -916,31 +869,27 @@ class MappingNodeConverter(NodeConverterBase):
             xform_mat = self.generate_variable_id_str("xform_mat")
             if self.bl_node.vector_type == "TEXTURE":
                 # texture inverse mapping
-                self.local_code.append("mat4 %s = inverse(%s * %s * %s)" %
-                                       (xform_mat, loc_mat, rot_mat, sca_mat))
+                self.local_code.append(
+                    f"mat4 {xform_mat} = inverse({loc_mat} * {rot_mat} * {sca_mat})"
+                )
             elif self.bl_node.vector_type == "POINT":
-                self.local_code.append("mat4 %s = %s * %s * %s" %
-                                       (xform_mat, loc_mat, rot_mat, sca_mat))
+                self.local_code.append(f"mat4 {xform_mat} = {loc_mat} * {rot_mat} * {sca_mat}")
             elif self.bl_node.vector_type == "NORMAL":
                 # inverse transpose
-                self.local_code.append("mat4 %s = transpose(inverse(%s * %s))"
-                                       % (xform_mat, rot_mat, sca_mat))
+                self.local_code.append(
+                    f"mat4 {xform_mat} = transpose(inverse({rot_mat} * {sca_mat}))"
+                )
             else:  # "VECTOR"
                 # no translation
-                self.local_code.append("mat4 %s = %s * %s" %
-                                       (xform_mat, rot_mat, sca_mat))
-            self.local_code.append(
-                "%s = (%s * vec4(%s, 1.0)).xyz;" %
-                (out_vec, xform_mat, in_vec))
+                self.local_code.append(f"mat4 {xform_mat} = {rot_mat} * {sca_mat}")
+            self.local_code.append(f"{out_vec} = ({xform_mat} * vec4({in_vec}, 1.0)).xyz;")
 
         self.out_sockets_map[output_socket] = out_vec
 
         if self.bl_node.vector_type == "NORMAL":
             # need additonal normalize
             self.local_code.append("// Normalization for NORMAL mapping")
-            self.local_code.append(
-                '%s = normalize(%s)' % (out_vec, out_vec)
-            )
+            self.local_code.append(f'{out_vec} = normalize({out_vec})')
 
 
 class TangentNodeConverter(NodeConverterBase):
@@ -959,9 +908,7 @@ class TangentNodeConverter(NodeConverterBase):
         tangent_id = self.generate_socket_id_str(tangent_socket)
         self.out_sockets_map[tangent_socket] = tangent_id
 
-        self.local_code.append(
-            '%s = TANGENT' % tangent_id
-        )
+        self.local_code.append(f'{tangent_id} = TANGENT')
 
 
 class UvmapNodeConverter(NodeConverterBase):
@@ -974,9 +921,7 @@ class UvmapNodeConverter(NodeConverterBase):
         uv_id = self.generate_socket_id_str(uv_socket)
         self.out_sockets_map[uv_socket] = uv_id
 
-        self.local_code.append(
-            '%s = vec3(UV, 0.0)' % uv_id
-        )
+        self.local_code.append(f'{uv_id} = vec3(UV, 0.0)')
 
         logging.warning(
             "'%s' use the active UV map, make sure the correct "
@@ -992,7 +937,7 @@ class GeometryNodeConverter(NodeConverterBase):
         socket = self.bl_node.outputs[bl_name]
         socket_id = self.generate_socket_id_str(socket)
         self.out_sockets_map[socket] = socket_id
-        self.local_code.append("%s = %s" % (socket_id, gd_name))
+        self.local_code.append(f"{socket_id} = {gd_name}")
         self.view_to_world(socket_id, is_direction=is_direction)
         self.yup_to_zup(socket_id)
 
@@ -1055,14 +1000,8 @@ class GeneralNodeConverter(NodeConverterBase):
 
     def parse_node_to_fragment(self):
         function = find_node_function(self.bl_node)
-        in_arguments = list()
-
-        for socket in self.bl_node.inputs:
-            in_arguments.append(
-                self.in_sockets_map[socket]
-            )
-
-        out_arguments = list()
+        in_arguments = [self.in_sockets_map[socket] for socket in self.bl_node.inputs]
+        out_arguments = []
         for socket in self.bl_node.outputs:
             socket_id = self.generate_socket_id_str(socket)
             self.out_sockets_map[socket] = socket_id

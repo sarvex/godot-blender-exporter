@@ -175,10 +175,7 @@ class GodotExporter:
             if not obj.visible_get():
                 return False
 
-        if self.config["use_export_selected"] and not obj.select_get():
-            return False
-
-        return True
+        return bool(not self.config["use_export_selected"] or obj.select_get())
 
     def export_scene(self):
         # pylint: disable-msg=too-many-branches

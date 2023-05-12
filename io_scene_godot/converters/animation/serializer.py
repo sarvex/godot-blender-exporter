@@ -19,15 +19,11 @@ UPDATE_CAPTURE = 3
 
 def strip_adjacent_dup_keyframes(frames, values):
     """Strip removable keyframes to reduce export size"""
-    stripped_frames = list()
-    stripped_values = list()
-
     assert len(frames) == len(values)
     length = len(frames)
 
-    stripped_frames.append(frames[0])
-    stripped_values.append(values[0])
-
+    stripped_frames = [frames[0]]
+    stripped_values = [values[0]]
     duplicated = False
     for index in range(1, length - 1):
         if not duplicated:
@@ -130,14 +126,11 @@ class Track:
         self.path = track_path
         # default to linear
         self.interp = LINEAR_INTERPOLATION
-        self.frames = list()
-        self.values = list()
+        self.frames = []
+        self.values = []
 
-        for frame in frames_iter:
-            self.frames.append(frame)
-        for value in values_iter:
-            self.values.append(value)
-
+        self.frames.extend(iter(frames_iter))
+        self.values.extend(iter(values_iter))
         assert len(self.frames) == len(self.values)
 
     def add_frame_data(self, frame, value):
@@ -147,15 +140,11 @@ class Track:
 
     def frame_end(self):
         """The frame number of last frame"""
-        if not self.frames:
-            return 0
-        return self.frames[-1]
+        return 0 if not self.frames else self.frames[-1]
 
     def frame_begin(self):
         """The frame number of first frame"""
-        if not self.frames:
-            return 0
-        return self.frames[0]
+        return 0 if not self.frames else self.frames[0]
 
     def convert_to_keys_object(self):
         """Convert to a godot animation keys object"""
@@ -183,8 +172,8 @@ class Track:
             self.frames = self.frames + track.frames
             self.values = self.values + track.values
         else:
-            new_frames = list()
-            new_values = list()
+            new_frames = []
+            new_values = []
 
             blend_begin = max(self.frame_begin(), track.frame_begin())
             blend_end = min(self.frame_end(), track.frame_end())
@@ -518,12 +507,12 @@ class AnimationResource(InternalResource):
             updated_track = self.tracks[node_path_str]
             updated_track.blend(track)
         else:
-            track_id_str = 'tracks/{}'.format(len(self.tracks))
+            track_id_str = f'tracks/{len(self.tracks)}'
             self.tracks[node_path_str] = track
-            self[track_id_str + '/type'] = '"{}"'.format(track.type)
-            self[track_id_str + '/path'] = node_path_str
-            self[track_id_str + '/interp'] = track.interp
-            self[track_id_str + '/keys'] = track
+            self[f'{track_id_str}/type'] = f'"{track.type}"'
+            self[f'{track_id_str}/path'] = node_path_str
+            self[f'{track_id_str}/interp'] = track.interp
+            self[f'{track_id_str}/keys'] = track
 
     # pylint: disable-msg=too-many-arguments
     def add_obj_xform_track(self, node_type, track_path,
@@ -593,8 +582,7 @@ class AnimationPlayer(NodeTemplate):
         resource_id = escn_file.force_add_internal_resource(new_anim_resource)
 
         # this filter may not catch all illegal char
-        self['anims/{}'.format(resource_name_filtered)] = (
-            "SubResource({})".format(resource_id))
+        self[f'anims/{resource_name_filtered}'] = f"SubResource({resource_id})"
 
         return new_anim_resource
 
@@ -602,10 +590,14 @@ class AnimationPlayer(NodeTemplate):
 def find_child_animation_player(node):
     """Find AnimationPlayer in node's children, None is
     returned if not find one"""
-    for child in node.children:
-        if child.get_type() == 'AnimationPlayer':
-            return child
-    return None
+    return next(
+        (
+            child
+            for child in node.children
+            if child.get_type() == 'AnimationPlayer'
+        ),
+        None,
+    )
 
 
 def get_animation_player(escn_file, export_settings, godot_node):
